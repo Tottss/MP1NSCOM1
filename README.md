@@ -13,15 +13,17 @@ TFTP protocol using UDP with TCP acknowledgements
 * [] End of File signaling
 
 # Core Functionality
-* [] Session Establishment
+* [X] Session Establishment
 * [] File Operations (Upload & Download Binary File)
-* [] Session Termination 
+* [X] Session Termination 
 
 # Error Handling
 * [] Timeout Detected Correctly
 * [] Retransmission Triggered
 * [] Data packet loss recovered
 * [] File not Found Error
+* [X] Wrong Header
+* [] Mismatch Sequence
 
 # Bonus
 * [] Checksum or Hash Verification
