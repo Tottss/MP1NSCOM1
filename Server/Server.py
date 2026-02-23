@@ -33,7 +33,7 @@ def awaiting_connection(client_addr):
 
         server_packet.mtype="ACK"
         server_packet.seq_syn = client_packet.seq_ack
-        server_packet.seq_ack = client_packet.seq_syn + 1
+        server_packet.seq_ack = client_packet.seq_syn 
         print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
         server.sendto(server_packet.encode(), client_addr)
         print("Connection Established")

@@ -51,7 +51,7 @@ def establish_connection(ipadd, port):
 
         client_packet.mtype=""
         client_packet.seq_syn = server_packet.seq_ack
-        client_packet.seq_ack = server_packet.seq_syn + 1
+        client_packet.seq_ack = server_packet.seq_syn
         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
         print("Connection Succesful !")
     else:
