@@ -1,19 +1,12 @@
 a. Introduction
-
 b. Protocol Overview
     i. Swimlane diagrams and description of protocol message exchanges
-
 c. Packet Message Formats
     i. Message Types
-
 d. State Machines (Transition Diagram)
     i. Client
     ii. Server
-
 e. Explanation of reliability mechanisms
-
 f. Error-handling
-
 g. File Transfer Operations
-
 h. End-of-file Signaling
