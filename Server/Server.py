@@ -18,6 +18,7 @@ def awaiting_connection(client_addr):
 
          #client's ISN for this example is 67
         server_packet = Packet(mtype="SYN-ACK", seq_syn = 67, seq_ack = client_packet.seq_syn + 1)
+        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
         server.sendto(server_packet.encode(), client_addr)
     else:
         print("Error: Header is not \"SYN\"")
@@ -33,38 +34,51 @@ def awaiting_connection(client_addr):
         server_packet.mtype="ACK"
         server_packet.seq_syn = client_packet.seq_ack
         server_packet.seq_ack = client_packet.seq_syn + 1
+        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
         server.sendto(server_packet.encode(), client_addr)
         print("Connection Established")
     else:
         print("Error: Header is not \"ACK\"")
         
         
-def receive_file(init_packet, client_addr):
-    filename, _ = init_packet.payload.split('|')
-    print(f"Receiving: {filename}")
+def receive_file(client_addr):
+    global client_packet, server_packet
+    if client_packet.mtype == "STORE":
+        print(f"Acknowledged packet from {client_addr}")
+        filename, _ = client_packet.payload.split('|')
+        print(f"Receiving: {filename}")
+        server_packet.mtype="ACK"
+        server_packet.seq_ack = client_packet.seq_syn + 1
+        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+        server.sendto(server_packet.encode(), client_addr)
+    else:
+        print("Error: Header is not \"STORE\"")
     
-    expected_seq = 1
     with open(f"{filename}", "wb") as f:
         while True:
             raw, addr = server.recvfrom(2048)
-            pkt = Packet.decode(raw)
+            client_packet = Packet.decode(raw)
             
-            if pkt.mtype == "EOF": # End of file signaling
+            if client_packet.mtype == "EOF": # End of file signaling
                 print("Transfer finished.")
                 break
             
-            if pkt.mtype == "DATA":
-                if pkt.seq_syn == expected_seq: # Verify sequence 
-                    f.write(pkt.payload.encode('latin-1')) # Binary-safe
+            if client_packet.mtype == "DATA":
+                if client_packet.seq_syn == server_packet.seq_ack: # Verify sequence 
+                    f.write(client_packet.payload.encode('latin-1')) # Binary-safe
                     
                     # Send ACK
-                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq)
-                    server.sendto(ack_pkt.encode(), client_addr)
-                    expected_seq += 1
+                    server_packet.mtype="ACK"
+                    server_packet.seq_ack += 1
+                    print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                    server.sendto(server_packet.encode(), client_addr)
                 else:
                     # Session mismatch
-                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq-1)
-                    server.sendto(ack_pkt.encode(), client_addr)
+                    server_packet.mtype="ACK"
+                    server_packet.seq_ack -= 1
+                    print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                    server.sendto(server_packet.encode(), client_addr)
+    f.close()
           
 #file download handler                    
 def handle_download(request_pkt, client_addr):
@@ -97,7 +111,8 @@ def handle_download(request_pkt, client_addr):
                         break
                 except socket.timeout:
                     print(f"Retransmitting packet {seq} to client...")
-    
+    f.close()
+
     # Send EOF to signal finish
     server.sendto(Packet(mtype="EOF").encode(), client_addr)
     server.settimeout(None)              
@@ -110,6 +125,7 @@ def disconnect_connection(client_addr):
     server_packet.mtype="FIN-ACK"
     server_packet.seq_syn = client_packet.seq_ack
     server_packet.seq_ack = client_packet.seq_syn + 1
+    print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
     server.sendto(server_packet.encode(), client_addr)
 
     #awaiting ACK from client
@@ -124,6 +140,9 @@ def disconnect_connection(client_addr):
         server_packet.seq_syn = 0
         server_packet.seq_ack = 0
         server.sendto(server_packet.encode(), client_addr)
+        server_packet.mtype=""
+        server_packet.payload_size=0
+        server_packet.payload=""
         print("Disconnected from Client")
     else:
         print("Error: Header is not \"ACK\"")
@@ -144,7 +163,7 @@ def start():
             case "SYN":
                 awaiting_connection(client_addr)
             case "STORE":
-                receive_file(client_packet, client_addr)
+                receive_file(client_addr)
             case "GET":
                 handle_download(client_packet, client_addr)
             case "FIN":
