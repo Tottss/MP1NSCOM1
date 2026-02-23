@@ -1,9 +1,9 @@
-## MP1NSCOM1
-TFTP protocol using UDP with TCP acknowledgements
+# MP1NSCOM1
+## TFTP protocol using UDP with TCP acknowledgements
 
-## Task Checklist
+# Task Checklist
 
-# RFC
+## RFC
 * [X] Introduction
 * [] Protocol Overview and Swimlane Diagram
 * [] State Machine Diagram for Client and Server
@@ -12,12 +12,13 @@ TFTP protocol using UDP with TCP acknowledgements
 * [] File Transfer Operations
 * [] End of File signaling
 
-# Core Functionality
+## Core Functionality
+* [] Message Format
 * [X] Session Establishment
 * [] File Operations (Upload & Download Binary File)
 * [X] Session Termination 
 
-# Error Handling
+## Error Handling
 * [] Timeout Detected Correctly
 * [] Retransmission Triggered
 * [] Data packet loss recovered
@@ -25,6 +26,6 @@ TFTP protocol using UDP with TCP acknowledgements
 * [X] Wrong Header
 * [] Mismatch Sequence
 
-# Bonus
+## Bonus
 * [] Checksum or Hash Verification
 * [] Encryption or Authentication
