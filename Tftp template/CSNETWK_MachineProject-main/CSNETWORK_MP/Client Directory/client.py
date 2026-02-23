@@ -1,7 +1,3 @@
-# 12:44 p.m
-# De Jesus, Andrei Zarmin D. 
-# Perez, Patrick Hans A.
-
 import socket
 import os
 from pathlib import Path
@@ -12,8 +8,9 @@ FORMAT = 'utf-8'
 IP_ADDRESS = "127.0.0.1"
 PERMANENT_PORT = 12345  
 
+#Creates UDP Socket
 def create_socket():
-    return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    return socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def display_commands():
     print("COMMAND LISTS")

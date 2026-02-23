@@ -24,6 +24,8 @@ c. Packet Message Formats
 
     iii.  Payload Length: A 2-byte integer indicating the size of the data segment
 
+    iv.  Payload : The hash of the segmented data 
+
 d. State Machines (Transition Diagram)
     i. Client
     ii. Server
