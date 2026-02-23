@@ -58,10 +58,8 @@ def receive_file(client_addr):
         while True:
             raw, addr = server.recvfrom(2048)
             client_packet = Packet.decode(raw)
+            print(client_packet.mtype)
             
-            if client_packet.mtype == "EOF": # End of file signaling
-                print("Transfer finished.")
-                break
             
             if client_packet.mtype == "DATA":
                 if client_packet.seq_syn == server_packet.seq_ack: # Verify sequence 
@@ -78,6 +76,9 @@ def receive_file(client_addr):
                     server_packet.seq_ack -= 1
                     print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
                     server.sendto(server_packet.encode(), client_addr)
+            if client_packet.mtype == "EOF": # End of file signaling
+                print("Transfer finished.")
+                break
     f.close()
           
 #file download handler                    

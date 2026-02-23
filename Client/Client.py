@@ -106,6 +106,16 @@ def send_file(filename):
     client_packet.payload=f"{filename}|{filesize}"
     print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
     client.sendto(client_packet.encode(), server_addr)
+    
+    try:
+        client.settimeout(2.0)
+        raw, _ = client.recvfrom(2048)
+        server_packet = Packet.decode(raw)
+        if server_packet.mtype == "ACK":
+            print(f"Server ready for upload: {filename}")
+    except socket.timeout:
+        print("Server did not acknowledge upload request.")
+        return
 
     if server_packet.mtype == "ACK":
         print(f"Acknowledged packet from {server_addr}")
@@ -121,7 +131,7 @@ def send_file(filename):
             payload_str = chunk.decode('latin-1') 
 
             client_packet.mtype="DATA"
-            client_packet.seq_syn = client_packet.seq_ack
+            client_packet.seq_syn = server_packet.seq_ack
             client_packet.payload=payload_str
 
             # Retransmission logic
@@ -133,7 +143,7 @@ def send_file(filename):
                     server_packet = Packet.decode(raw)
 
                     if server_packet.mtype == "ACK":
-                        client_packet.seq_syn = server_packet.seq_ack
+                        client_packet.seq_syn += 1
                         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
                         break
                 except socket.timeout:
