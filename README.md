@@ -13,6 +13,7 @@
 * [] End of File signaling
 
 ## Core Functionality
+* [] Message Format
 * [] Session Establishment
 * [] File Operations (Upload & Download Binary File)
 * [] Session Termination 
