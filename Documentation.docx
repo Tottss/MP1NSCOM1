@@ -1,4 +1,7 @@
 a. Introduction
+    User Datagram Protocol (UDP) is a connectionless, best-effort transport protocol with minimal overhead. This results in highly speedy communication, as the protocol does not require a handshake or acknowledgement before transferring data to the destination. However, this speed comes with trade-offs. Packets can be lost in transit, making UDP unreliable for guaranteed data transfer. Furthermore, UDP suffers from unordered delivery, statelessness, and a lack of congestion control.
+
+    Because Transmission Control Protocol (TCP) is designed to be reliable and complete, it is often preferred for critical data transfer. To bridge this gap, this project introduces an implementation of TCP features over a UDP foundation using Python socket programming. This implementation integrates core TCP mechanics—such as acknowledgements, session management, error handling, and retransmission strategies—to support a reliable file transfer protocol.
 b. Protocol Overview
     i. Swimlane diagrams and description of protocol message exchanges
 c. Packet Message Formats
