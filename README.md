@@ -15,12 +15,12 @@
 ## Core Functionality
 * [] Message Format
 * [X] Session Establishment
-* [] File Operations (Upload & Download Binary File)
+* [X] File Operations (Upload & Download Binary File)
 * [X] Session Termination 
 
 ## Error Handling
-* [] Timeout Detected Correctly
-* [] Retransmission Triggered
+* [X] Timeout Detected Correctly
+* [X] Retransmission Triggered
 * [] Data packet loss recovered
 * [] File not Found Error
 * [X] Wrong Header
