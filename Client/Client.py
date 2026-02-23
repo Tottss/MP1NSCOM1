@@ -1,5 +1,6 @@
 import socket
 import os
+import time
 from pathlib import Path
 from Packet import Packet
 
@@ -90,6 +91,79 @@ def leave_connection():
     
     return True
     
+def send_file(filename):
+    global server_addr
+    filesize = os.path.getsize(filename)
+    
+    # notify server of file details 
+    start_pkt = Packet(mtype="STORE", payload=f"{filename}|{filesize}")
+    client.sendto(start_pkt.encode(), server_addr)
+
+    with open(filename, "rb") as f:
+        seq = 1
+        while True:
+            chunk = f.read(512)
+            if not chunk: break
+            
+            # Binary-safe encoding for JSON 
+            payload_str = chunk.decode('latin-1') 
+            data_pkt = Packet(mtype="DATA", seq_syn=seq, payload=payload_str)
+            
+            # Retransmission logic
+            while True:
+                client.sendto(data_pkt.encode(), server_addr)
+                client.settimeout(2.0) # Timeout for lost packets
+                try:
+                    raw, _ = client.recvfrom(2048)
+                    ack = Packet.decode(raw)
+                    if ack.mtype == "ACK" and ack.seq_ack == seq:
+                        seq += 1
+                        break
+                except socket.timeout:
+                    print(f"Retransmitting packet {seq}...")
+    
+    # Termination: Send EOF
+    client.sendto(Packet(mtype="EOF").encode(), server_addr)
+    client.settimeout(None)
+    print("Upload complete.")
+        
+def request_download(filename):
+    global server_addr
+    pkt = Packet(mtype="GET", payload=filename)
+    client.sendto(pkt.encode(), server_addr)
+    
+    expected_seq = 1
+    with open(f"received_{filename}", "wb") as f:
+        while True:
+            try:
+                client.settimeout(5.0) 
+                raw, addr = client.recvfrom(2048)
+                pkt = Packet.decode(raw)
+                #  File Not Found 
+                if pkt.mtype == "ERROR":
+                    print(f"Server Error: {pkt.payload}") 
+                    return
+
+                if pkt.mtype == "EOF":
+                    print("Download complete.")
+                    break
+                
+                if pkt.mtype == "DATA" and pkt.seq_syn == expected_seq:
+                    f.write(pkt.payload.encode('latin-1'))
+                    # Send ACK 
+                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq)
+                    client.sendto(ack_pkt.encode(), server_addr)
+                    expected_seq += 1
+                else:
+                    # Re-ACK last received sequence 
+                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq - 1)
+                    client.sendto(ack_pkt.encode(), server_addr)
+            except socket.timeout:
+                print("Download timed out.")
+                break
+    client.settimeout(None)
+    
+            
 def main():
     display_commands()
     flag = True
@@ -98,7 +172,7 @@ def main():
         prompt = input("> ").strip()
         if not prompt:
             print("Error: No command entered. Please try again.")
-            continue  # Skip this iteration and go back to prompting the user
+            continue  
         cmd_key = prompt.split()
 
         match cmd_key[0]:
@@ -108,8 +182,22 @@ def main():
                     port = int(cmd_key[2])  # an int
 
                     establish_connection(ipadd, port)
+            
+            case "/store":
+                if len(cmd_key) == 2:
+                    filename = cmd_key[1]
+                    if os.path.exists(filename):
+                        send_file(filename)
+                    else:
+                        print("Error: File not found locally.")
+                        
+            case "/get":
+                    if len(cmd_key) == 2:
+                        filename = cmd_key[1]
+                        request_download(filename)
             case "/leave":
                 if leave_connection():
                     flag = False
+                    
 
 main()
