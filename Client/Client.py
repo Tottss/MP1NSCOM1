@@ -36,7 +36,7 @@ def establish_connection(ipadd, port):
 
         try:
             #awaiting SYN-ACK from server
-            raw_bytes, server_addr = client.recvfrom(1024)
+            raw_bytes, server_addr = client.recvfrom(65535)
 
             server_packet = Packet.decode(raw_bytes)
 
@@ -349,7 +349,7 @@ def request_download(filename):
     while True:
         try:
             client.settimeout(5.0) 
-            raw, addr = client.recvfrom(2048)
+            raw, addr = client.recvfrom(65535)
             server_packet = Packet.decode(raw)
             attempts = 0
             #Handle initial ACK with file size
