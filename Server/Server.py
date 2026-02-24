@@ -102,6 +102,14 @@ def handle_download(client_addr):
     if client_packet.mtype == "GET":
         print(f"Acknowledged packet from {client_addr}")
         filename = client_packet.payload.strip(" \x00")
+        
+        if not os.path.exists(filename):
+            print(f"Error: File '{filename}' not found on server.") 
+            server_packet.mtype = "ERROR"
+            server_packet.payload = "File not found"
+            server.sendto(server_packet.encode(), client_addr)
+            return 
+        
         print(f"Sending: {filename}")
         filesize = os.path.getsize(filename)
         server_packet.mtype="ACK"
@@ -115,13 +123,6 @@ def handle_download(client_addr):
 
     print(f"Client requested: {filename}")
     
-    #Check if file exists 
-    if not os.path.exists(filename):
-        client_packet.mtype="ERROR"
-        client_packet.payload="File not found"
-        server.sendto(client_packet.encode(), client_addr)
-        return
-
     with open(filename, "rb") as f:
         while True:
             chunk = f.read(512)
