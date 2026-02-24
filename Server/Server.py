@@ -6,6 +6,22 @@ server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_packet = None
 server_packet = None
 
+def reset_connection_state():
+    global client_packet, server_packet
+    if server_packet:
+        server_packet.mtype = ""
+        server_packet.seq_syn = 0
+        server_packet.seq_ack = 0
+        server_packet.payload_size = 0
+        server_packet.payload = ""
+    if client_packet:
+        client_packet.mtype = ""
+        client_packet.seq_syn = 0
+        client_packet.seq_ack = 0
+        client_packet.payload_size = 0
+        client_packet.payload = ""
+    print("Deleting session, waiting for new client...\n")
+
 #Establish connection
 def awaiting_connection(client_addr):
     global client_packet, server_packet
@@ -19,26 +35,42 @@ def awaiting_connection(client_addr):
          #client's ISN for this example is 67
         server_packet = Packet(mtype="SYN-ACK", seq_syn = 67, seq_ack = client_packet.seq_syn + 1)
         print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
-        server.sendto(server_packet.encode(), client_addr)
     else:
         print("Error: Header is not \"SYN\"")
 
+    max_retries = 3
+    attempts = 0
+    connected = False
+
     #awaiting ACK from client
-    raw_bytes, client_addr = server.recvfrom(1024)
-
-    client_packet = Packet.decode(raw_bytes)
-
-    if client_packet.mtype == "ACK":
-        print(f"Acknowledged packet from {client_addr}")
-
-        server_packet.mtype="ACK"
-        server_packet.seq_syn = client_packet.seq_ack
-        server_packet.seq_ack = client_packet.seq_syn 
-        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+    while attempts < max_retries:
         server.sendto(server_packet.encode(), client_addr)
-        print("Connection Established")
-    else:
-        print("Error: Header is not \"ACK\"")
+        server.settimeout(5.0)
+
+        try:
+            raw_bytes, client_addr = server.recvfrom(1024)
+            client_packet = Packet.decode(raw_bytes)
+
+            if client_packet.mtype == "ACK":
+                print(f"Acknowledged packet from {client_addr}")
+
+                server_packet.mtype="ACK"
+                server_packet.seq_syn = client_packet.seq_ack
+                server_packet.seq_ack = client_packet.seq_syn 
+                print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                server.sendto(server_packet.encode(), client_addr)
+                print("Connection Established")
+                connected = True
+                break
+            else:
+                print("Error: Header is not \"ACK\"")
+        except (socket.timeout, ConnectionResetError):
+            attempts += 1
+            print(f"Timeout waiting for final ACK. Retrying SYN-ACK {attempts}/{max_retries}...")
+
+    if not connected:
+        print("Client unresponsive during handshake.")
+        reset_connection_state()
         
         
 def receive_file(client_addr):
