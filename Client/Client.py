@@ -365,7 +365,7 @@ def request_download(filename):
                 print("\nError: Connection timed out. Max retries reached during download.")
                 break 
             
-            print(f"\nTimeout. Retrying {attempts}/{max_retries}...")
+            print(f"\nRetransmitting packet {client_packet.seq_syn} ({attempts}/{max_retries})...")
             # Re-transmit the last packet we sent 
             client.sendto(client_packet.encode(), server_addr)
     
