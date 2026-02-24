@@ -23,77 +23,151 @@ def establish_connection(ipadd, port):
 
     #client's ISN for this example is 69
     client_packet = Packet(mtype="SYN", seq_syn=69)
-    #sending SYN to server
-    client.sendto(client_packet.encode(), server_addr)
 
-    #awaiting SYN-ACK from server
-    raw_bytes, server_addr = client.recvfrom(1024)
+    max_retries = 3
+    attempts = 0
+    connected = False
 
-    server_packet = Packet.decode(raw_bytes)
-
-    if server_packet.mtype == "SYN-ACK":
-        print(f"Acknowledged packet from {server_addr}")
-        client_packet.mtype="ACK"
-        client_packet.seq_syn = server_packet.seq_ack
-        client_packet.seq_ack = server_packet.seq_syn + 1
-        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+    while attempts < max_retries:
+        #sending SYN to server
         client.sendto(client_packet.encode(), server_addr)
-    else:
-        print("Error: Header is not \"SYN-ACK\"")
+        client.settimeout(2.0)
 
-    #awaiting SYN-ACK from server
-    raw_bytes, server_addr = client.recvfrom(1024)
+        try:
+            #awaiting SYN-ACK from server
+            raw_bytes, server_addr = client.recvfrom(1024)
 
-    server_packet = Packet.decode(raw_bytes)
+            server_packet = Packet.decode(raw_bytes)
 
-    if server_packet.mtype == "ACK":
-        print(f"Acknowledged packet from {server_addr}")
+            if server_packet.mtype == "SYN-ACK":
+                print(f"Acknowledged packet from {server_addr}")
+                client_packet.mtype="ACK"
+                client_packet.seq_syn = server_packet.seq_ack
+                client_packet.seq_ack = server_packet.seq_syn + 1
+                print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                connected = True
+                break
+            else:
+                print("Error: Header is not \"SYN-ACK\"")
+        except socket.timeout:
+            attempts += 1
+            print(f"Connection timeout. Retrying SYN {attempts}/{max_retries}...")
 
-        client_packet.mtype=""
-        client_packet.seq_syn = server_packet.seq_ack
-        client_packet.seq_ack = server_packet.seq_syn
-        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-        print("Connection Succesful !")
-    else:
-        print("Error: Header is not \"ACK\"")
+    if not connected:
+        print("Error: Could not reach server.")
+        return False
+    
+    attempts = 0
+    connected = False
+
+    #for the sequence numbers to be stable
+    while attempts < max_retries:
+        client.sendto(client_packet.encode(), server_addr)
+        client.settimeout(2.0)
+
+        try:
+            raw_bytes, server_addr = client.recvfrom(1024)
+
+            server_packet = Packet.decode(raw_bytes)
+
+            if server_packet.mtype == "ACK":
+                print(f"Acknowledged packet from {server_addr}")
+
+                client_packet.mtype=""
+                client_packet.seq_syn = server_packet.seq_ack
+                client_packet.seq_ack = server_packet.seq_syn
+                print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                print("Connection Succesful !")
+                connected = True
+                break
+            else:
+                print("Error: Header is not \"ACK\"")
+        except socket.timeout:
+            attempts += 1
+            print(f"Connection timeout. Retrying ACK {attempts}/{max_retries}...")
+
+    if not connected:
+        print("Error: Could not reach server.")
+        return False
+
+    client.settimeout(None) 
+    return True
 
 #Leave the connection
 def leave_connection():
     global server_addr, client_packet, server_packet
     
     client_packet.mtype="FIN"
-    client.sendto(client_packet.encode(), server_addr)
-    print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+
+    max_retries = 3
+    attempts = 0
+    fin_acked = False
+    while attempts < max_retries:
+        client.sendto(client_packet.encode(), server_addr)
+        client.settimeout(2.0)
+        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
 
     #awaiting FIN-ACK from server
-    raw_bytes, server_addr = client.recvfrom(1024)
+        try:
+            raw_bytes, server_addr = client.recvfrom(1024)
 
-    server_packet = Packet.decode(raw_bytes)
+            server_packet = Packet.decode(raw_bytes)
 
-    if server_packet.mtype == "FIN-ACK":
-        print(f"Acknowledged packet from {server_addr}")
+            if server_packet.mtype == "FIN-ACK":
+                print(f"Acknowledged packet from {server_addr}")
 
-        client_packet.mtype="ACK"
-        client_packet.seq_syn = server_packet.seq_ack
-        client_packet.seq_ack = server_packet.seq_syn + 1
-        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-        client.sendto(client_packet.encode(), server_addr)
-    else:
-        print("Error: Header is not \"FIN-ACK\"")
+                client_packet.mtype="ACK"
+                client_packet.seq_syn = server_packet.seq_ack
+                client_packet.seq_ack = server_packet.seq_syn + 1
+                print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                fin_acked = True
+                break
+            else:
+                print("Error: Header is not \"FIN-ACK\"")
+        except socket.timeout:
+            attempts += 1
+            print(f"Timeout waiting for FIN-ACK. Retrying FIN {attempts}/{max_retries}...")
 
-    raw_bytes, _ = client.recvfrom(1024)
-    server_packet = Packet.decode(raw_bytes)
-    
-    if server_packet.mtype == "ACK":
-        print("Disconnected from server")
-        client_packet.mtype=""
-        client_packet.seq_syn=0
-        client_packet.seq_ack=0
-        client_packet.payload_size=0
-        client_packet.payload=""
-    else:
-        print("Error: Cannot Disconnect from Server")
+    if not fin_acked:
+        print("Error: Server unresponsive. Forcing local disconnect.")
+        client_packet.mtype = ""
+        client_packet.seq_syn = 0
+        client_packet.seq_ack = 0
+        client_packet.payload_size = 0
+        client_packet.payload = ""
+        client.settimeout(None)
         return False
+    
+    attempts = 0  
+    disconnected = False
+
+    while attempts < max_retries:
+        client.sendto(client_packet.encode(), server_addr)
+        client.settimeout(2.0)
+
+        try:
+            raw_bytes, _ = client.recvfrom(1024)
+            server_packet = Packet.decode(raw_bytes)
+        
+            if server_packet.mtype == "ACK":
+                print("Disconnected from server")
+                client_packet.mtype=""
+                client_packet.seq_syn=0
+                client_packet.seq_ack=0
+                client_packet.payload_size=0
+                client_packet.payload=""
+                disconnected = True
+                break
+            else:
+                print(f"Error: Header is not \"ACK\"")
+        except socket.timeout:
+            attempts += 1
+            print(f"Timeout waiting for final ACK. Retrying ACK {attempts}/{max_retries}...")
+        
+    client.settimeout(None)
+    
+    if not disconnected:
+        print("Error: Did not receive final ACK, but disconnected locally anyway.")
     
     return True
     
@@ -101,43 +175,52 @@ def send_file(filename):
     global server_addr, client_packet, server_packet
     filesize = os.path.getsize(filename)
     
-    # notify server of file details 
-    client_packet.mtype="STORE"
-    client_packet.payload=f"{filename}|{filesize}"
-    print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-    client.sendto(client_packet.encode(), server_addr)
+    client_packet.mtype = "STORE"
+    client_packet.payload = f"{filename}|{filesize}"
     
-    try:
-        client.settimeout(2.0)
-        raw, _ = client.recvfrom(2048)
-        server_packet = Packet.decode(raw)
-        if server_packet.mtype == "ACK":
-            print(f"Server ready for upload: {filename}")
-    except socket.timeout:
-        print("Server did not acknowledge upload request.")
-        return
+    max_retries = 3
+    attempts = 0
+    server_ready = False
+    #Check if server is up
+    while attempts < max_retries:
+        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+        client.sendto(client_packet.encode(), server_addr)
+        client.settimeout(3.0)
+        
+        try:
+            raw, _ = client.recvfrom(2048)
+            server_packet = Packet.decode(raw)
+            if server_packet.mtype == "ACK":
+                print(f"Server ready for upload: {filename}")
+                server_ready = True
+                break 
+        except socket.timeout:
+            attempts += 1
+            print(f"Server did not acknowledge request. Retrying {attempts}/{max_retries}...")
+            
+    if not server_ready:
+        print("Error: Server is cannot be reached.")
+        return 
 
-    if server_packet.mtype == "ACK":
-        print(f"Acknowledged packet from {server_addr}")
-    else:
-        print("Error: Header is not \"ACK\"")
-
+    #upload file
     with open(filename, "rb") as f:
         while True:
             chunk = f.read(512)
-            if not chunk: break
+            if not chunk: 
+                break # End of file
             
-            # Binary-safe encoding for JSON 
             payload_str = chunk.decode('latin-1') 
-
-            client_packet.mtype="DATA"
+            client_packet.mtype = "DATA"
             client_packet.seq_syn = server_packet.seq_ack
-            client_packet.payload=payload_str
+            client_packet.payload = payload_str
 
-            # Retransmission logic
-            while True:
+            chunk_attempts = 0
+            chunk_acked = False
+            
+            #check if server is up while files is sending
+            while chunk_attempts < max_retries:
                 client.sendto(client_packet.encode(), server_addr)
-                client.settimeout(2.0) # Timeout for lost packets
+                client.settimeout(2.0) 
                 try:
                     raw, _ = client.recvfrom(2048)
                     server_packet = Packet.decode(raw)
@@ -145,13 +228,17 @@ def send_file(filename):
                     if server_packet.mtype == "ACK":
                         client_packet.seq_syn += 1
                         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-                        break
+                        chunk_acked = True
+                        break #  break inner loop
                 except socket.timeout:
-                    print(f"Retransmitting packet {client_packet.seq_syn}...")
-    f.close()
-    
-    # Termination: Send EOF
-    client_packet.mtype="EOF"
+                    chunk_attempts += 1
+                    print(f"Retransmitting packet {client_packet.seq_syn} ({chunk_attempts}/{max_retries})...")
+            
+            if not chunk_acked:
+                print("Error: Server lost connection mid-upload.")
+                return
+            
+    client_packet.mtype = "EOF"
     client_packet.payload_size = 0
     client_packet.payload = ""
     client.sendto(client_packet.encode(), server_addr)
@@ -163,13 +250,17 @@ def request_download(filename):
     client_packet.mtype="GET"
     client_packet.payload=filename
     client.sendto(client_packet.encode(), server_addr)
+
+    max_retries = 3
+    attempts = 0
     
     with open(f"received_{filename}", "wb") as f:
-        while True:
+        while attempts < max_retries:
             try:
                 client.settimeout(5.0) 
                 raw, addr = client.recvfrom(2048)
                 server_packet = Packet.decode(raw)
+                attempts = 0
                 #  File Not Found 
                 if server_packet.mtype == "ERROR":
                     print(f"Server Error: {server_packet.payload}") 
@@ -193,7 +284,12 @@ def request_download(filename):
                     print("Download complete.")
                     break
             except socket.timeout:
-                print("Download timed out.")
+                attempts += 1
+                print(f"Packet lost. Retrying {attempts}/{max_retries}...")
+                client.sendto(client_packet.encode(), server_addr)
+
+            if attempts == max_retries:
+                print("Error: Server stopped responding. Aborting download.")
                 break
     f.close()
 
@@ -219,8 +315,8 @@ def main():
                         ipadd = cmd_key[1]  # a string
                         port = int(cmd_key[2])  # an int
 
-                        establish_connection(ipadd, port)
-                        is_connected = True
+                        is_connected = establish_connection(ipadd, port)
+                        
                 else:
                     print("Error: You are already connected")
             
