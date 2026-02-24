@@ -49,12 +49,13 @@ def establish_connection(ipadd, port):
                 break
             else:
                 print("Error: Header is not \"SYN-ACK\"")
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Connection timeout. Retrying SYN {attempts}/{max_retries}...")
 
     if not connected:
         print("Error: Could not reach server.")
+        client.settimeout(None)
         return False
     
     attempts = 0
@@ -82,7 +83,7 @@ def establish_connection(ipadd, port):
                 break
             else:
                 print("Error: Header is not \"ACK\"")
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Connection timeout. Retrying ACK {attempts}/{max_retries}...")
 
