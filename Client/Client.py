@@ -174,6 +174,7 @@ def leave_connection():
 def send_file(filename):
     global server_addr, client_packet, server_packet
     filesize = os.path.getsize(filename)
+    bytes_sent = 0 # Track progress
     
     client_packet.mtype = "STORE"
     client_packet.payload = f"{filename}|{filesize}"
@@ -245,6 +246,12 @@ def send_file(filename):
                     if server_packet.mtype == "ACK":
                         client_packet.seq_syn += 1
                         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                        bytes_sent += len(chunk)
+                        
+                        # Calculate progress percentage
+                        progress = (bytes_sent / filesize) * 100
+                        bar = "#" * int(progress // 5)
+                        print(f"\rUploading: [{bar:<20}] {progress:.1f}%           ", end="")
                         chunk_acked = True
                         break #  break inner loop
                 except socket.timeout:
@@ -260,7 +267,7 @@ def send_file(filename):
     client_packet.payload = ""
     client.sendto(client_packet.encode(), server_addr)
     client.settimeout(None)
-    print("Upload complete.")
+    print("\nUpload complete.")
         
 def request_download(filename):
     global server_addr, client_packet, server_packet
@@ -281,50 +288,65 @@ def request_download(filename):
     client_packet.mtype="GET"
     client_packet.payload=filename
     client.sendto(client_packet.encode(), server_addr)
+    
+    total_size = 0
+    bytes_received = 0
+    file_opened = False
+    f = None
 
     max_retries = 3
     attempts = 0
     
-    with open(final_filename, "wb") as f:
-        while attempts < max_retries:
-            try:
-                client.settimeout(5.0) 
-                raw, addr = client.recvfrom(2048)
-                server_packet = Packet.decode(raw)
-                attempts = 0
-                #  File Not Found 
-                if server_packet.mtype == "ERROR":
-                    print(f"Server Error: {server_packet.payload}") 
-                    return
-                
-                if server_packet.mtype == "DATA":
-                    if server_packet.seq_syn == client_packet.seq_ack:
-                        f.write(server_packet.payload.encode('latin-1'))
-                        # Send ACK 
-                        client_packet.mtype="ACK"
-                        client_packet.seq_ack += 1
-                        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-                        client.sendto(client_packet.encode(), server_addr)
-                    else:
-                        # Re-ACK last received sequence 
-                        client_packet.mtype="ACK"
-                        client_packet.seq_ack -= 1
-                        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
-                        client.sendto(client_packet.encode(), server_addr)
-                if server_packet.mtype == "EOF":
-                    print("Download complete.")
-                    break
-            except socket.timeout:
-                attempts += 1
-                print(f"Packet lost. Retrying {attempts}/{max_retries}...")
-                client.sendto(client_packet.encode(), server_addr)
+    while True:
+        try:
+            client.settimeout(5.0) 
+            raw, addr = client.recvfrom(2048)
+            server_packet = Packet.decode(raw)
 
-            if attempts == max_retries:
-                print("Error: Server stopped responding. Aborting download.")
+            #Handle initial ACK with file size
+            if server_packet.mtype == "ACK" and total_size == 0:
+                try:
+                    total_size = int(server_packet.payload)
+                    # Open file only after we know it exists and have the size
+                    f = open(final_filename, "wb")
+                    file_opened = True
+                    continue
+                except ValueError:
+                    continue
+
+            #Handle Errors (e.g. File Not Found)
+            if server_packet.mtype == "ERROR":
+                print(f"\nServer Error: {server_packet.payload}") 
+                return
+
+            
+            if server_packet.mtype == "DATA" and file_opened:
+                if server_packet.seq_syn == client_packet.seq_ack:
+                    data = server_packet.payload.encode('latin-1')
+                    f.write(data)
+                    bytes_received += len(data)
+                    print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                    if total_size > 0:
+                        progress = (bytes_received / total_size) * 100
+                        bar = "=" * int(progress // 5)
+                        print(f"Downloading: [{bar:<20}] {progress:.1f}%           ", end="")
+
+                    client_packet.mtype = "ACK"
+                    client_packet.seq_ack += 1
+                    client.sendto(client_packet.encode(), server_addr)
+
+            if server_packet.mtype == "EOF":
+                print("\nDownload complete.")
                 break
-    f.close()
 
+        except socket.timeout:
+            print("\nTimeout. Retrying...")
+            client.sendto(client_packet.encode(), server_addr)
+    
+    if f: f.close()
     client.settimeout(None)
+
+
     
             
 def main():
