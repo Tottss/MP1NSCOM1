@@ -97,7 +97,7 @@ def establish_connection(ipadd, port):
 
 #Leave the connection
 def leave_connection():
-    global server_addr, client_packet, server_packet
+    global server_addr, client_packet, server_packet, is_connected
     
     client_packet.mtype="FIN"
 
@@ -138,7 +138,7 @@ def leave_connection():
         client_packet.payload_size = 0
         client_packet.payload = ""
         client.settimeout(None)
-        return False
+        is_connected = False
     
     attempts = 0  
     disconnected = False
@@ -159,6 +159,7 @@ def leave_connection():
                 client_packet.payload_size=0
                 client_packet.payload=""
                 disconnected = True
+                is_connected = False
                 break
             else:
                 print(f"Error: Header is not \"ACK\"")
@@ -170,11 +171,12 @@ def leave_connection():
     
     if not disconnected:
         print("Error: Did not receive final ACK, but disconnected locally anyway.")
+        is_connected = False
     
     return True
     
 def send_file(filename):
-    global server_addr, client_packet, server_packet
+    global server_addr, client_packet, server_packet, is_connected
     filesize = os.path.getsize(filename)
     bytes_sent = 0 # Track progress
     
@@ -220,6 +222,7 @@ def send_file(filename):
             
     if not server_ready:
         print("Error: Server is cannot be reached.")
+        is_connected = False
         return 
 
     #upload file
@@ -262,6 +265,7 @@ def send_file(filename):
             
             if not chunk_acked:
                 print("Error: Server lost connection mid-upload.")
+                is_connected = False
                 return
             
     client_packet.mtype = "EOF"
@@ -289,9 +293,10 @@ def send_file(filename):
         print("\nUpload complete.")
     else:
         print("\nUpload finished, but EOF acknowledgement failed.")
+        is_connected = False
         
 def request_download(filename):
-    global server_addr, client_packet, server_packet
+    global server_addr, client_packet, server_packet, is_connected
     
     # Filename increment logic
     base_path = Path(f"received_{filename}")
@@ -367,6 +372,7 @@ def request_download(filename):
             attempts += 1
             if attempts >= max_retries:
                 print("\nError: Connection timed out. Max retries reached during download.")
+                is_connected = False
                 break 
             
             print(f"\nRetransmitting packet {client_packet.seq_syn} ({attempts}/{max_retries})...")
@@ -423,6 +429,6 @@ def main():
                     if leave_connection():
                         flag = False
                 else:
-                    print("Error: You aren't connected to a server yet")    
+                   flag = False     
 
 main()
