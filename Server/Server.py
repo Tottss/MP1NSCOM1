@@ -46,6 +46,7 @@ def receive_file(client_addr):
     if client_packet.mtype == "STORE":
         print(f"Acknowledged packet from {client_addr}")
         filename, _ = client_packet.payload.split('|')
+        filename.strip(" \x00")
         print(f"Receiving: {filename}")
         server_packet.mtype="ACK"
         server_packet.seq_ack = client_packet.seq_syn + 1
@@ -82,40 +83,57 @@ def receive_file(client_addr):
     f.close()
           
 #file download handler                    
-def handle_download(request_pkt, client_addr):
-    filename = request_pkt.payload
+def handle_download(client_addr):
+    global client_packet, server_packet
+    if client_packet.mtype == "GET":
+        print(f"Acknowledged packet from {client_addr}")
+        filename = client_packet.payload.strip(" \x00")
+        print(f"Sending: {filename}")
+        server_packet.mtype="ACK"
+        server_packet.seq_ack = client_packet.seq_syn + 1
+        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+        server.sendto(server_packet.encode(), client_addr)
+    else:
+        print("Error: Header is not \"GET\"")
+
     print(f"Client requested: {filename}")
     
     #Check if file exists 
     if not os.path.exists(filename):
-        err_pkt = Packet(mtype="ERROR", payload="File not found")
-        server.sendto(err_pkt.encode(), client_addr)
+        client_packet.mtype="ERROR"
+        client_packet.payload="File not found"
+        server.sendto(client_packet.encode(), client_addr)
         return
 
     with open(filename, "rb") as f:
-        seq = 1
         while True:
             chunk = f.read(512)
             if not chunk: break
             
             payload_str = chunk.decode('latin-1')
-            data_pkt = Packet(mtype="DATA", seq_syn=seq, payload=payload_str)
+            server_packet.mtype="DATA"
+            server_packet.seq_syn = client_packet.seq_ack
+            server_packet.payload=payload_str
             
             while True:
-                server.sendto(data_pkt.encode(), client_addr)
+                server.sendto(server_packet.encode(), client_addr)
                 server.settimeout(2.0)
                 try:
                     raw, _ = server.recvfrom(2048)
-                    ack = Packet.decode(raw)
-                    if ack.mtype == "ACK" and ack.seq_ack == seq:
-                        seq += 1
+                    client_packet = Packet.decode(raw)
+                    if client_packet.mtype == "ACK":
+                        server_packet.seq_syn += 1
+                        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
                         break
                 except socket.timeout:
-                    print(f"Retransmitting packet {seq} to client...")
+                    print(f"Retransmitting packet {server_packet.seq_syn} to client...")
     f.close()
 
     # Send EOF to signal finish
-    server.sendto(Packet(mtype="EOF").encode(), client_addr)
+    server_packet.mtype="EOF"
+    server_packet.payload_size=0
+    server_packet.payload=""
+    server.sendto(server_packet.encode(), client_addr)
     server.settimeout(None)              
           
 #Disconnect Client
@@ -166,7 +184,7 @@ def start():
             case "STORE":
                 receive_file(client_addr)
             case "GET":
-                handle_download(client_packet, client_addr)
+                handle_download(client_addr)
             case "FIN":
                 disconnect_connection(client_addr)
 

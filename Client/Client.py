@@ -152,42 +152,46 @@ def send_file(filename):
     
     # Termination: Send EOF
     client_packet.mtype="EOF"
+    client_packet.payload_size = 0
     client_packet.payload = ""
     client.sendto(client_packet.encode(), server_addr)
     client.settimeout(None)
     print("Upload complete.")
         
 def request_download(filename):
-    global server_addr
-    pkt = Packet(mtype="GET", payload=filename)
-    client.sendto(pkt.encode(), server_addr)
+    global server_addr, client_packet, server_packet
+    client_packet.mtype="GET"
+    client_packet.payload=filename
+    client.sendto(client_packet.encode(), server_addr)
     
-    expected_seq = 1
     with open(f"received_{filename}", "wb") as f:
         while True:
             try:
                 client.settimeout(5.0) 
                 raw, addr = client.recvfrom(2048)
-                pkt = Packet.decode(raw)
+                server_packet = Packet.decode(raw)
                 #  File Not Found 
-                if pkt.mtype == "ERROR":
-                    print(f"Server Error: {pkt.payload}") 
+                if server_packet.mtype == "ERROR":
+                    print(f"Server Error: {server_packet.payload}") 
                     return
-
-                if pkt.mtype == "EOF":
+                
+                if server_packet.mtype == "DATA":
+                    if server_packet.seq_syn == client_packet.seq_ack:
+                        f.write(server_packet.payload.encode('latin-1'))
+                        # Send ACK 
+                        client_packet.mtype="ACK"
+                        client_packet.seq_ack += 1
+                        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                        client.sendto(client_packet.encode(), server_addr)
+                    else:
+                        # Re-ACK last received sequence 
+                        client_packet.mtype="ACK"
+                        client_packet.seq_ack -= 1
+                        print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                        client.sendto(client_packet.encode(), server_addr)
+                if server_packet.mtype == "EOF":
                     print("Download complete.")
                     break
-                
-                if pkt.mtype == "DATA" and pkt.seq_syn == expected_seq:
-                    f.write(pkt.payload.encode('latin-1'))
-                    # Send ACK 
-                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq)
-                    client.sendto(ack_pkt.encode(), server_addr)
-                    expected_seq += 1
-                else:
-                    # Re-ACK last received sequence 
-                    ack_pkt = Packet(mtype="ACK", seq_ack=expected_seq - 1)
-                    client.sendto(ack_pkt.encode(), server_addr)
             except socket.timeout:
                 print("Download timed out.")
                 break
@@ -199,6 +203,7 @@ def request_download(filename):
 def main():
     display_commands()
     flag = True
+    is_connected = False
 
     while flag:
         prompt = input("> ").strip()
@@ -209,11 +214,15 @@ def main():
 
         match cmd_key[0]:
             case "/join":
-                if len(cmd_key) == 3:
-                    ipadd = cmd_key[1]  # a string
-                    port = int(cmd_key[2])  # an int
+                if not is_connected:
+                    if len(cmd_key) == 3:
+                        ipadd = cmd_key[1]  # a string
+                        port = int(cmd_key[2])  # an int
 
-                    establish_connection(ipadd, port)
+                        establish_connection(ipadd, port)
+                        is_connected = True
+                else:
+                    print("Error: You are already connected")
             
             case "/store":
                 if len(cmd_key) == 2:
