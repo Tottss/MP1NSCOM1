@@ -8,6 +8,7 @@ client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_packet = None
 server_packet = None
 server_addr = None
+is_connected = False
 
 def display_commands():
     print("COMMAND LISTS")
@@ -376,9 +377,9 @@ def request_download(filename):
     client.settimeout(None)
             
 def main():
+    global is_connected
     display_commands()
     flag = True
-    is_connected = False
 
     while flag:
         prompt = input("> ").strip()
@@ -400,20 +401,28 @@ def main():
                     print("Error: You are already connected")
             
             case "/store":
-                if len(cmd_key) == 2:
-                    filename = cmd_key[1]
-                    if os.path.exists(filename):
-                        send_file(filename)
-                    else:
-                        print("Error: File not found locally.")
+                if is_connected:
+                    if len(cmd_key) == 2:
+                        filename = cmd_key[1]
+                        if os.path.exists(filename):
+                            send_file(filename)
+                        else:
+                            print("Error: File not found locally.")
+                else:
+                    print("Error: You aren't connected to a server yet")
                         
             case "/get":
+                if is_connected:
                     if len(cmd_key) == 2:
                         filename = cmd_key[1]
                         request_download(filename)
+                else:
+                    print("Error: You aren't connected to a server yet")
             case "/leave":
-                if leave_connection():
-                    flag = False
-                    
+                if is_connected:
+                    if leave_connection():
+                        flag = False
+                else:
+                    print("Error: You aren't connected to a server yet")    
 
 main()
