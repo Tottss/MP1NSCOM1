@@ -24,12 +24,12 @@ def calculate_file_hash(filename):
 
 def display_commands():
     print("COMMAND LISTS")
-    print("/join <server_ip_add> <port>")
+    print("/join <server_ip_add> <port> <password>")
     print("/leave")
     print("/store <filename>")
     print("/get <filename>")
 
-def establish_connection(ipadd, port):
+def establish_connection(ipadd, port, password):
     print("Connecting to Server...")
     global server_addr, client_packet, server_packet
     server_addr = (ipadd, port)
@@ -43,8 +43,8 @@ def establish_connection(ipadd, port):
             break
             
     client.settimeout(2.0)
-    #client's ISN for this example is 69
-    client_packet = Packet(mtype="SYN", seq_syn=69)
+    hashed_pw = hashlib.sha256(password.encode()).hexdigest()
+    client_packet = Packet(mtype="SYN", seq_syn=69, payload=hashed_pw)
 
     max_retries = 3
     attempts = 0
@@ -452,11 +452,12 @@ def main():
         match cmd_key[0]:
             case "/join":
                 if not is_connected:
-                    if len(cmd_key) == 3:
+                    if len(cmd_key) == 4:
                         ipadd = cmd_key[1]  # a string
                         port = int(cmd_key[2])  # an int
+                        password = cmd_key[3]
 
-                        is_connected = establish_connection(ipadd, port)
+                        is_connected = establish_connection(ipadd, port, password)
                         
                 else:
                     print("Error: You are already connected")

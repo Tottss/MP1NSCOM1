@@ -12,6 +12,10 @@ server_packet = None
 SIMULATE_DROP = True
 DROP_RATE = 0.10
 
+#pass of server
+SERVER_PASS = "iwantbonuspoints"
+PASS_HASH = hashlib.sha256(SERVER_PASS.encode()).hexdigest()
+
 def calculate_file_hash(filename):
     """Generates a SHA-256 hash for a given file."""
     sha256 = hashlib.sha256()
@@ -58,7 +62,11 @@ def awaiting_connection(client_addr):
     #awaiting SYN from client
 
     if client_packet.mtype == "SYN":
-        print(f"Acknowledged packet from {client_addr}")
+        if client_packet.payload != PASS_HASH:
+            print(f"Error: Authentication failed, Incorrect password.")
+            return
+        
+        print(f"Acknowledged packet from {client_addr}, Client Authenticated")
 
          #client's ISN for this example is 67
         server_packet = Packet(mtype="SYN-ACK", seq_syn = 67, seq_ack = client_packet.seq_syn + 1)
