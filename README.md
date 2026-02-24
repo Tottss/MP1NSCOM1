@@ -29,3 +29,15 @@
 ## Bonus
 * [] Checksum or Hash Verification
 * [] Encryption or Authentication
+
+
+# unofficial checklist
+* [] server closing 
+* [] f.close
+* [] file already exist
+* [] file overwrite
+* [] retransmission
+* [] client connection timeout
+* [] packet count show
+* [] error sequencing
+
