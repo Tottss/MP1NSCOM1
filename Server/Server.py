@@ -47,6 +47,20 @@ def receive_file(client_addr):
         print(f"Acknowledged packet from {client_addr}")
         filename, _ = client_packet.payload.split('|')
         filename.strip(" \x00")
+        # Check if file exists
+        if os.path.exists(filename):
+            print(f"File {filename} exists. Asking client for overwrite...")
+            server_packet.mtype = "ERROR"
+            server_packet.payload = "FILE_EXISTS"
+            server.sendto(server_packet.encode(), client_addr)
+            
+            # Wait for client's decision
+            raw, addr = server.recvfrom(1024)
+            client_packet = Packet.decode(raw)
+            
+            if client_packet.payload != "YES":
+                print("Overwrite cancelled by client.")
+                return 
         print(f"Receiving: {filename}")
         server_packet.mtype="ACK"
         server_packet.seq_ack = client_packet.seq_syn + 1
