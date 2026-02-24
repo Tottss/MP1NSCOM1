@@ -3,12 +3,24 @@ import os
 import time
 from pathlib import Path
 from Packet import Packet
+import hashlib
 
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_packet = None
 server_packet = None
 server_addr = None
 is_connected = False
+
+def calculate_file_hash(filename):
+    """Generates a SHA-256 hash for a given file."""
+    sha256 = hashlib.sha256()
+    with open(filename, "rb") as f:
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 def display_commands():
     print("COMMAND LISTS")
@@ -293,7 +305,7 @@ def send_file(filename):
             
     client_packet.mtype = "EOF"
     client_packet.payload_size = 0
-    client_packet.payload = ""
+    client_packet.payload = calculate_file_hash(filename)
 
     #Check if EOF acknowledged
     attempts = 0
@@ -388,7 +400,18 @@ def request_download(filename):
                 client_packet.mtype="ACK"
                 client_packet.seq_ack += 1
                 client.sendto(client_packet.encode(), server_addr)
-                print("\nDownload complete.")
+                if f:
+                    f.close()
+                    f = None
+                
+                print("Verifying file integrity...")
+                received_hash = server_packet.payload
+                local_hash = calculate_file_hash(final_filename)
+                
+                if received_hash == local_hash:
+                    print("\nDownload complete.")
+                else:
+                    print("Error: File check failed")
                 break
 
         except (socket.timeout, ConnectionResetError):
