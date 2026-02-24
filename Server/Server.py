@@ -236,26 +236,34 @@ def disconnect_connection(client_addr):
     server_packet.seq_syn = client_packet.seq_ack
     server_packet.seq_ack = client_packet.seq_syn + 1
     print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
-    server.sendto(server_packet.encode(), client_addr)
+    
+    max_retries = 3
+    attempts = 0
 
-    #awaiting ACK from client
-    raw_bytes, client_addr = server.recvfrom(1024)
-
-    client_packet = Packet.decode(raw_bytes)
-
-    if client_packet.mtype == "ACK":
-        print(f"Acknowledged packet from {client_addr}")
-
-        server_packet.mtype="ACK"
-        server_packet.seq_syn = 0
-        server_packet.seq_ack = 0
+    while attempts < max_retries:
+        print(f"Seq No for Server: {server_packet.seq_syn}, Seq No for Client: {server_packet.seq_ack}")
         server.sendto(server_packet.encode(), client_addr)
-        server_packet.mtype=""
-        server_packet.payload_size=0
-        server_packet.payload=""
-        print("Disconnected from Client")
-    else:
-        print("Error: Header is not \"ACK\"")
+        server.settimeout(2.0)
+
+        try:
+            raw_bytes, client_addr = server.recvfrom(1024)
+            client_packet = Packet.decode(raw_bytes)
+
+            if client_packet.mtype == "ACK":
+                print(f"Acknowledged ACK from {client_addr}")
+                server_packet.mtype = "ACK"
+                server.sendto(server_packet.encode(), client_addr)
+                print("Disconnected from Client cleanly.")
+                reset_connection_state()
+                return
+            else:
+                print("Error: Header is not \"ACK\"")
+        except (socket.timeout, ConnectionResetError):
+            attempts += 1
+            print(f"Timeout waiting for FIN-ACK's ACK. Retrying {attempts}/{max_retries}...")
+            
+    print("Client unresponsive during disconnect. Forcing drop.")
+    reset_connection_state()
 
 #start server
 def start():
