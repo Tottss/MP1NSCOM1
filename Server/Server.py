@@ -109,7 +109,7 @@ def receive_file(client_addr):
         while True:
             try:
                 server.settimeout(5.0)
-                raw, addr = server.recvfrom(2048)
+                raw, addr = server.recvfrom(65535)
                 client_packet = Packet.decode(raw)
                 attempts = 0
                 
