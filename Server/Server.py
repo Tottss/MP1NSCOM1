@@ -191,20 +191,22 @@ def start():
     print("SERVER ON")
     flag = True
 
-    while flag:
-        raw_bytes, client_addr = server.recvfrom(1024)
+    try:
+        while flag:
+            raw_bytes, client_addr = server.recvfrom(1024)
 
-        client_packet = Packet.decode(raw_bytes)
-        
-        match client_packet.mtype:
-            case "SYN":
-                awaiting_connection(client_addr)
-            case "STORE":
-                receive_file(client_addr)
-            case "GET":
-                handle_download(client_addr)
-            case "FIN":
-                disconnect_connection(client_addr)
+            client_packet = Packet.decode(raw_bytes)
+            
+            match client_packet.mtype:
+                case "SYN":
+                    awaiting_connection(client_addr)
+                case "STORE":
+                    receive_file(client_addr)
+                case "GET":
+                    handle_download(client_addr)
+                case "FIN":
+                    disconnect_connection(client_addr)
+                    
 
 start()
 
