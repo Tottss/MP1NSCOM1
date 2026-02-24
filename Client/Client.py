@@ -125,7 +125,7 @@ def leave_connection():
                 break
             else:
                 print("Error: Header is not \"FIN-ACK\"")
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Timeout waiting for FIN-ACK. Retrying FIN {attempts}/{max_retries}...")
 
@@ -161,7 +161,7 @@ def leave_connection():
                 break
             else:
                 print(f"Error: Header is not \"ACK\"")
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Timeout waiting for final ACK. Retrying ACK {attempts}/{max_retries}...")
         
@@ -213,7 +213,7 @@ def send_file(filename):
                 print(f"Server ready for upload: {filename}")
                 server_ready = True
                 break 
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Server did not acknowledge request. Retrying {attempts}/{max_retries}...")
             
@@ -255,7 +255,7 @@ def send_file(filename):
                         print(f"\rUploading: [{bar:<20}] {progress:.1f}%           ", end="")
                         chunk_acked = True
                         break #  break inner loop
-                except socket.timeout:
+                except (socket.timeout, ConnectionResetError):
                     chunk_attempts += 1
                     print(f"Retransmitting packet {client_packet.seq_syn} ({chunk_attempts}/{max_retries})...")
             
@@ -266,9 +266,28 @@ def send_file(filename):
     client_packet.mtype = "EOF"
     client_packet.payload_size = 0
     client_packet.payload = ""
-    client.sendto(client_packet.encode(), server_addr)
+
+    #Check if EOF acknowledged
+    attempts = 0
+    eof_acked = False
+    while attempts < max_retries:
+        client.sendto(client_packet.encode(), server_addr)
+        client.settimeout(2.0)
+        try:
+            raw, _ = client.recvfrom(2048)
+            server_packet = Packet.decode(raw)
+            if server_packet.mtype == "ACK":
+                eof_acked = True
+                break
+        except (socket.timeout, ConnectionResetError):
+            attempts += 1
+            print(f"\nRetrying EOF packet ({attempts}/{max_retries})...")
+
     client.settimeout(None)
-    print("\nUpload complete.")
+    if eof_acked:
+        print("\nUpload complete.")
+    else:
+        print("\nUpload finished, but EOF acknowledgement failed.")
         
 def request_download(filename):
     global server_addr, client_packet, server_packet
@@ -303,7 +322,7 @@ def request_download(filename):
             client.settimeout(5.0) 
             raw, addr = client.recvfrom(2048)
             server_packet = Packet.decode(raw)
-
+            attempts = 0
             #Handle initial ACK with file size
             if server_packet.mtype == "ACK" and total_size == 0:
                 try:
@@ -340,15 +359,18 @@ def request_download(filename):
                 print("\nDownload complete.")
                 break
 
-        except socket.timeout:
-            print("\nTimeout. Retrying...")
+        except (socket.timeout, ConnectionResetError):
+            attempts += 1
+            if attempts >= max_retries:
+                print("\nError: Connection timed out. Max retries reached during download.")
+                break 
+            
+            print(f"\nTimeout. Retrying {attempts}/{max_retries}...")
+            # Re-transmit the last packet we sent 
             client.sendto(client_packet.encode(), server_addr)
     
     if f: f.close()
     client.settimeout(None)
-
-
-    
             
 def main():
     display_commands()

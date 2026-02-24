@@ -92,6 +92,9 @@ def receive_file(client_addr):
                     print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
                     server.sendto(server_packet.encode(), client_addr)
             if client_packet.mtype == "EOF": # End of file signaling
+                server_packet.mtype="ACK"
+                server_packet.seq_ack += 1
+                server.sendto(server_packet.encode(), client_addr)
                 print("Transfer finished.")
                 break
     f.close()
@@ -189,23 +192,30 @@ def start():
     global client_packet, server_packet
     server.bind(('127.0.0.1', 12345))
     print("SERVER ON")
-    flag = True
+    server.settimeout(1.0)
 
     try:
-        while flag:
-            raw_bytes, client_addr = server.recvfrom(1024)
+        while True:
+            try:
+                raw_bytes, client_addr = server.recvfrom(1024)
 
-            client_packet = Packet.decode(raw_bytes)
-            
-            match client_packet.mtype:
-                case "SYN":
-                    awaiting_connection(client_addr)
-                case "STORE":
-                    receive_file(client_addr)
-                case "GET":
-                    handle_download(client_addr)
-                case "FIN":
-                    disconnect_connection(client_addr)
+                client_packet = Packet.decode(raw_bytes)
+                    
+                match client_packet.mtype:
+                    case "SYN":
+                        awaiting_connection(client_addr)
+                    case "STORE":
+                        receive_file(client_addr)
+                    case "GET":
+                        handle_download(client_addr)
+                    case "FIN":
+                        disconnect_connection(client_addr)
+            except (socket.timeout, ConnectionResetError):
+                continue
+
+    except KeyboardInterrupt:
+        print("\nSERVER OFF")
+        server.close()
                     
 
 start()
