@@ -37,6 +37,7 @@ def awaiting_connection(client_addr):
         print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
     else:
         print("Error: Header is not \"SYN\"")
+        return
 
     max_retries = 3
     attempts = 0
@@ -100,35 +101,50 @@ def receive_file(client_addr):
         server.sendto(server_packet.encode(), client_addr)
     else:
         print("Error: Header is not \"STORE\"")
+        return
     
+    max_retries = 3
+    attempts = 0
     with open(f"{filename}", "wb") as f:
         while True:
-            raw, addr = server.recvfrom(2048)
-            client_packet = Packet.decode(raw)
-            print(client_packet.mtype)
-            
-            
-            if client_packet.mtype == "DATA":
-                if client_packet.seq_syn == server_packet.seq_ack: # Verify sequence 
-                    f.write(client_packet.payload.encode('latin-1')) # Binary-safe
-                    
-                    # Send ACK
+            try:
+                server.settimeout(5.0)
+                raw, addr = server.recvfrom(2048)
+                client_packet = Packet.decode(raw)
+                attempts = 0
+                
+                if client_packet.mtype == "DATA":
+                    if client_packet.seq_syn == server_packet.seq_ack: # Verify sequence 
+                        f.write(client_packet.payload.encode('latin-1')) # Binary-safe
+                        
+                        # Send ACK
+                        server_packet.mtype="ACK"
+                        server_packet.seq_ack += 1
+                        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                        server.sendto(server_packet.encode(), client_addr)
+                    else:
+                        # Session mismatch
+                        server_packet.mtype="ACK"
+                        server_packet.seq_ack -= 1
+                        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                        server.sendto(server_packet.encode(), client_addr)
+                if client_packet.mtype == "EOF": # End of file signaling
                     server_packet.mtype="ACK"
                     server_packet.seq_ack += 1
-                    print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
                     server.sendto(server_packet.encode(), client_addr)
-                else:
-                    # Session mismatch
-                    server_packet.mtype="ACK"
-                    server_packet.seq_ack -= 1
-                    print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
-                    server.sendto(server_packet.encode(), client_addr)
-            if client_packet.mtype == "EOF": # End of file signaling
-                server_packet.mtype="ACK"
-                server_packet.seq_ack += 1
+                    print("Transfer finished.")
+                    break
+            except (socket.timeout, ConnectionResetError):
+                attempts += 1
+                if attempts >= max_retries:
+                    print("\nError: Client disconnected mid-upload. Aborting.")
+                    f.close() 
+                    os.remove(filename) # Clean up partial file
+                    reset_connection_state()
+                    return
+                print(f"Timeout waiting for DATA. Retrying ACK {attempts}/{max_retries}...")
+                # Retransmit last ACK
                 server.sendto(server_packet.encode(), client_addr)
-                print("Transfer finished.")
-                break
     f.close()
           
 #file download handler                    
