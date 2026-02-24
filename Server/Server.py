@@ -47,6 +47,20 @@ def receive_file(client_addr):
         print(f"Acknowledged packet from {client_addr}")
         filename, _ = client_packet.payload.split('|')
         filename.strip(" \x00")
+        # Check if file exists
+        if os.path.exists(filename):
+            print(f"File {filename} exists. Asking client for overwrite...")
+            server_packet.mtype = "ERROR"
+            server_packet.payload = "FILE_EXISTS"
+            server.sendto(server_packet.encode(), client_addr)
+            
+            # Wait for client's decision
+            raw, addr = server.recvfrom(1024)
+            client_packet = Packet.decode(raw)
+            
+            if client_packet.payload != "YES":
+                print("Overwrite cancelled by client.")
+                return 
         print(f"Receiving: {filename}")
         server_packet.mtype="ACK"
         server_packet.seq_ack = client_packet.seq_syn + 1
@@ -88,23 +102,27 @@ def handle_download(client_addr):
     if client_packet.mtype == "GET":
         print(f"Acknowledged packet from {client_addr}")
         filename = client_packet.payload.strip(" \x00")
+        
+        if not os.path.exists(filename):
+            print(f"Error: File '{filename}' not found on server.") 
+            server_packet.mtype = "ERROR"
+            server_packet.payload = "File not found"
+            server.sendto(server_packet.encode(), client_addr)
+            return 
+        
         print(f"Sending: {filename}")
+        filesize = os.path.getsize(filename)
         server_packet.mtype="ACK"
+        server_packet.payload = str(filesize)
         server_packet.seq_ack = client_packet.seq_syn + 1
         print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+        
         server.sendto(server_packet.encode(), client_addr)
     else:
         print("Error: Header is not \"GET\"")
 
     print(f"Client requested: {filename}")
     
-    #Check if file exists 
-    if not os.path.exists(filename):
-        client_packet.mtype="ERROR"
-        client_packet.payload="File not found"
-        server.sendto(client_packet.encode(), client_addr)
-        return
-
     with open(filename, "rb") as f:
         while True:
             chunk = f.read(512)
@@ -173,20 +191,22 @@ def start():
     print("SERVER ON")
     flag = True
 
-    while flag:
-        raw_bytes, client_addr = server.recvfrom(1024)
+    try:
+        while flag:
+            raw_bytes, client_addr = server.recvfrom(1024)
 
-        client_packet = Packet.decode(raw_bytes)
-        
-        match client_packet.mtype:
-            case "SYN":
-                awaiting_connection(client_addr)
-            case "STORE":
-                receive_file(client_addr)
-            case "GET":
-                handle_download(client_addr)
-            case "FIN":
-                disconnect_connection(client_addr)
+            client_packet = Packet.decode(raw_bytes)
+            
+            match client_packet.mtype:
+                case "SYN":
+                    awaiting_connection(client_addr)
+                case "STORE":
+                    receive_file(client_addr)
+                case "GET":
+                    handle_download(client_addr)
+                case "FIN":
+                    disconnect_connection(client_addr)
+                    
 
 start()
 
