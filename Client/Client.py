@@ -207,11 +207,34 @@ def send_file(filename):
                     print("Upload cancelled.")
                     return
                 
-                # Send the YES/NO decision
-                client.sendto(client_packet.encode(), server_addr)
-                # Receive the ACK for the decision to start the actual data transfer
-                raw, _ = client.recvfrom(2048)
-                server_packet = Packet.decode(raw)
+                decision_attempts = 0
+                decision_acked = False
+                while decision_attempts < max_retries:
+                    client.sendto(client_packet.encode(), server_addr)
+                    client.settimeout(2.0)
+                    try:
+                        raw, _ = client.recvfrom(2048)
+                        server_packet = Packet.decode(raw)
+                        
+                        if server_packet.mtype == "ACK":
+                            decision_acked = True
+                            break # Break the inner decision loop
+                            
+                    except (socket.timeout, ConnectionResetError):
+                        decision_attempts += 1
+                        print(f"Server didn't acknowledge overwrite decision. Retrying ({decision_attempts}/{max_retries})...")
+                
+                if not decision_acked:
+                    print("Error: Server lost connection during overwrite decision.")
+                    is_connected = False
+                    return
+                
+                if choice != 'y':
+                    print("Upload cancelled.")
+                    return
+                print(f"Server ready for upload: {filename}")
+                server_ready = True
+                break
             if server_packet.mtype == "ACK":
                 print(f"Server ready for upload: {filename}")
                 server_ready = True
@@ -370,12 +393,12 @@ def request_download(filename):
 
         except (socket.timeout, ConnectionResetError):
             attempts += 1
+            print(f"\nRetransmitting packet {client_packet.seq_syn} ({attempts}/{max_retries})...")
             if attempts >= max_retries:
                 print("\nError: Connection timed out. Max retries reached during download.")
                 is_connected = False
                 break 
             
-            print(f"\nRetransmitting packet {client_packet.seq_syn} ({attempts}/{max_retries})...")
             # Re-transmit the last packet we sent 
             client.sendto(client_packet.encode(), server_addr)
     
