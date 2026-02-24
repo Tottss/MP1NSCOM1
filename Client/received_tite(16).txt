@@ -1,0 +1,52 @@
+CC: lscs@dlsu.edu.ph , univrel@dlsu-lscs.org 
+
+
+TEMPLATE: Response (Follow up)
+Good day, <Name>!
+
+I hope this email finds you well.
+
+We would like to follow up on our invitation to participate as a speaker in <EVENT NAME> on <EVENT DATE> from <00:00 AM/PM to 00:00 AM/PM>, the event will be conducted at <EVENT VENUE>. <BRIEF EVENT DESCRIPTION>.
+
+I have re-attached the activity and topic outline document for the event. Please let us know if you are in need of further clarification about the topic, outline or the deliverables needed. We would appreciate your response on or before <Month Day>. 
+
+Thank you so much!
+
+<Email Signature>
+
+TEMPLATE: Response (Accept)
+Good day, <Name>!
+
+Thank you for your response! We truly appreciate your interest and enthusiasm to become a speaker and share your proficiencies to contribute to this event. We are thrilled to inform you that we have officially reserved a speaker slot for you for the <Event Name> at <Event Time>.
+
+	We considerably value your expertise in your field and are honored to have you collaborate with the La Salle Computer Society. Please let us know if you have any concerns or need for clarification, and we will happily address them. Also, for documentation purposes and to help us finalize the preparations, we will need some of your information to proceed: 
+
+Contact Information (Email Address, Phone Number)
+Platform for preferred mode of communication, if any
+Brief summary of your credentials for event materials
+Formal photo, to be kept for pre-acts documents
+
+On behalf of La Salle Computer Society, thank you once more for your time. We are thrilled to have you on board as a speaker for <Event Name>!
+
+<Email Signature>
+
+TEMPLATE: Response (Decline)
+Good day, <Name>!
+
+Thank you for your response! We understand your decision. Nonetheless, we wish you all the best and hope to work with you in other LSCS events in the future. If you allow us, we will keep your contact information on file and will reach out to you should there be any events or collaborations that are in line with your expertise and availability.
+
+On behalf of La Salle Computer Society, thank you once more for your time. We truly appreciate your consideration and wish you a productive week ahead.
+
+<Email Signature>
+
+TEMPLATE: Response (Slot Filled)
+Good day, <Name>!
+
+Thank you for your response! We truly appreciate your interest and enthusiasm to become a speaker and share your proficiencies to contribute to this event. However, we would like to inform you that the speaker slot for this session has already been filled by another individual who confirmed prior to your response. 
+
+We are thankful for the time and consideration you extended to us. Should the speaker slot become available, we will notify you immediately. Furthermore, If permitted, we would be honored to reach out to you once more for relevant LSCS events or collaborations, as we considerably value your expertise in your field. We look forward to this possibility in the future and wish you well in your professional endeavors.
+
+On behalf of La Salle Computer Society, thank you once more for your time. We hope to have the opportunity to work with you in the future!
+
+<Email Signature>
+

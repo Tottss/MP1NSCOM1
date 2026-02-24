@@ -356,6 +356,9 @@ def request_download(filename):
                     client.sendto(client_packet.encode(), server_addr)
 
             if server_packet.mtype == "EOF":
+                client_packet.mtype="ACK"
+                client_packet.seq_ack += 1
+                client.sendto(client_packet.encode(), server_addr)
                 print("\nDownload complete.")
                 break
 

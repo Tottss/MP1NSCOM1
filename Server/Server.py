@@ -151,7 +151,7 @@ def receive_file(client_addr):
 def handle_download(client_addr):
     global client_packet, server_packet
     if client_packet.mtype == "GET":
-        print(f"Acknowledged packet from {client_addr}")
+        print(f"Acknowledged GET from {client_addr}")
         filename = client_packet.payload.strip(" \x00")
         
         if not os.path.exists(filename):
@@ -163,28 +163,31 @@ def handle_download(client_addr):
         
         print(f"Sending: {filename}")
         filesize = os.path.getsize(filename)
-        server_packet.mtype="ACK"
+        server_packet.mtype = "ACK"
         server_packet.payload = str(filesize)
         server_packet.seq_ack = client_packet.seq_syn + 1
-        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
-        
         server.sendto(server_packet.encode(), client_addr)
     else:
         print("Error: Header is not \"GET\"")
+        return
 
-    print(f"Client requested: {filename}")
+    max_retries = 3
     
     with open(filename, "rb") as f:
         while True:
             chunk = f.read(512)
-            if not chunk: break
+            if not chunk: 
+                break
             
             payload_str = chunk.decode('latin-1')
-            server_packet.mtype="DATA"
+            server_packet.mtype = "DATA"
             server_packet.seq_syn = client_packet.seq_ack
-            server_packet.payload=payload_str
+            server_packet.payload = payload_str
             
-            while True:
+            chunk_attempts = 0
+            chunk_acked = False
+            
+            while chunk_attempts < max_retries:
                 server.sendto(server_packet.encode(), client_addr)
                 server.settimeout(2.0)
                 try:
@@ -192,18 +195,37 @@ def handle_download(client_addr):
                     client_packet = Packet.decode(raw)
                     if client_packet.mtype == "ACK":
                         server_packet.seq_syn += 1
-                        print(f"Seq No for Client: {server_packet.seq_ack}, Seq No for Server: {server_packet.seq_syn}")
+                        chunk_acked = True
                         break
-                except socket.timeout:
-                    print(f"Retransmitting packet {server_packet.seq_syn} to client...")
-    f.close()
+                except (socket.timeout, ConnectionResetError):
+                    chunk_attempts += 1
+                    print(f"Retransmitting packet {server_packet.seq_syn} ({chunk_attempts}/{max_retries})...")
+                    
+            if not chunk_acked:
+                print("Client lost connection mid-download. Aborting.")
+                reset_connection_state()
+                return # Exit the function entirely
 
     # Send EOF to signal finish
-    server_packet.mtype="EOF"
-    server_packet.payload_size=0
-    server_packet.payload=""
-    server.sendto(server_packet.encode(), client_addr)
-    server.settimeout(None)              
+    server_packet.mtype = "EOF"
+    server_packet.payload_size = 0
+    server_packet.payload = ""
+    
+    attempts = 0
+    while attempts < max_retries:
+        server.sendto(server_packet.encode(), client_addr)
+        server.settimeout(2.0)
+        try:
+            raw, _ = server.recvfrom(2048)
+            client_packet = Packet.decode(raw)
+            if client_packet.mtype == "ACK":
+                print("Download completed successfully.")
+                # Sequence increments for EOF
+                server_packet.seq_syn += 1 
+                break
+        except (socket.timeout, ConnectionResetError):
+            attempts += 1
+            print(f"Retrying EOF packet({attempts}/{max_retries})...")            
           
 #Disconnect Client
 def disconnect_connection(client_addr):
