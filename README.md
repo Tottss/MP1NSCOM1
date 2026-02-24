@@ -34,8 +34,8 @@
 # unofficial checklist
 * [] server closing 
 * [] f.close
-* [] file already exist
-* [] file overwrite
+* [X] file already exist
+* [X] file overwrite
 * [] retransmission
 * [] client connection timeout
 * [] packet count show
