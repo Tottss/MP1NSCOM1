@@ -37,6 +37,17 @@ def reset_connection_state():
         client_packet.seq_ack = 0
         client_packet.payload_size = 0
         client_packet.payload = ""
+
+    #flush socket for true reset in buffer
+    server.setblocking(False)
+    while True:
+        try:
+            server.recv(65536)
+        except (BlockingIOError, socket.error):
+            break
+            
+    server.settimeout(1.0)
+
     print("Deleting session, waiting for new client...\n")
 
 #Establish connection
@@ -331,6 +342,7 @@ def disconnect_connection(client_addr):
         except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Timeout waiting for FIN-ACK's ACK. Retrying {attempts}/{max_retries}...")
+            server.sendto(server_packet.encode(), client_addr)
             
     print("Client unresponsive during disconnect. Forcing drop.")
     reset_connection_state()

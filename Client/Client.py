@@ -34,6 +34,15 @@ def establish_connection(ipadd, port):
     global server_addr, client_packet, server_packet
     server_addr = (ipadd, port)
 
+    #flush socket for true reset in buffer
+    client.setblocking(False)
+    while True:
+        try:
+            client.recv(65536)
+        except (BlockingIOError, socket.error):
+            break
+            
+    client.settimeout(2.0)
     #client's ISN for this example is 69
     client_packet = Packet(mtype="SYN", seq_syn=69)
 
