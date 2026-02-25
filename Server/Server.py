@@ -307,7 +307,7 @@ def handle_download(client_addr):
                     client_packet = Packet.decode(raw)
 
                     #Drops packet to simulate retransmission
-                    if SIMULATE_DROP and client_packet.mtype == "DATA" and sim_count < 5:
+                    if SIMULATE_DROP and client_packet.mtype == "ACK" and sim_count < 5:
                         if random.random() < DROP_RATE:
                             print(f"\n[!] SIMULATED DROP: Ignoring packet {client_packet.seq_syn}")
                             sim_count += 1
