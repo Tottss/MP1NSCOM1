@@ -3,6 +3,7 @@ import os
 import random
 from Packet import Packet
 import hashlib
+import time
 
 #Starts a socket connection to the server
 server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -277,6 +278,8 @@ def handle_download(client_addr):
 
     #Sets retries for timeout
     max_retries = 3
+    #Simulation count
+    sim_count = 0
     
     print(f"Sending: {filename}")
     with open(filename, "rb") as f:
@@ -295,9 +298,6 @@ def handle_download(client_addr):
             chunk_attempts = 0
             chunk_acked = False
 
-            #Simulation count
-            sim_count = 0
-
             #Loops to check if Chunks are properly acknowledged
             while chunk_attempts < max_retries:
                 server.sendto(server_packet.encode(), client_addr)
@@ -311,7 +311,8 @@ def handle_download(client_addr):
                         if random.random() < DROP_RATE:
                             print(f"\n[!] SIMULATED DROP: Ignoring packet {client_packet.seq_syn}")
                             sim_count += 1
-                            continue
+                            time.sleep(2.0)
+                            raise socket.timeout
                     
                     #Checks if chunk is acknowledged
                     if client_packet.mtype == "ACK":
