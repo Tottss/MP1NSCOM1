@@ -1,4 +1,0 @@
-This text file originated in the client folder. 
-This File is From Alice.
-
-Note: The content of this text file is use for verification only.

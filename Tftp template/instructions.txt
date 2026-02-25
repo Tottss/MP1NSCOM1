@@ -1,9 +1,0 @@
-Clone Repository using (git clone https://github.com/DreiZzzzz/S13_G10_DeJesus_Perez.git)
-
-Please use VSCODE and install python extensions.
-Run Server on VSCODE.
-
-Change line 53 @client.py to path (e.g. "C:\Users\perez\OneDrive\Desktop\CSNETWK_MachineProject-main")
-
-Run 3 instances of clients using cmd.
-open cmd -> (e.g. cd C:\Users\perez\OneDrive\Desktop\CSNETWK_MachineProject-main\CSNETWORK_MP\Client Directory) -> python client.py

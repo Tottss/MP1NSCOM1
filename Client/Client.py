@@ -5,12 +5,17 @@ from pathlib import Path
 from Packet import Packet
 import hashlib
 
+#Starts a socket connection to the client
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#Initializes Packets for both client and server
 client_packet = None
 server_packet = None
 server_addr = None
+#Checks for if client is connected to server or not
 is_connected = False
 
+#Calculate file hash
+#Generats a SHA256 hash for a file when transferring
 def calculate_file_hash(filename):
     """Generates a SHA-256 hash for a given file."""
     sha256 = hashlib.sha256()
@@ -22,6 +27,7 @@ def calculate_file_hash(filename):
             sha256.update(chunk)
     return sha256.hexdigest()
 
+#Displays Commands to be used by client
 def display_commands():
     print("COMMAND LISTS")
     print("/join <server_ip_add> <port> <password>")
@@ -29,12 +35,13 @@ def display_commands():
     print("/store <filename>")
     print("/get <filename>")
 
+#Establishes Connection to the Server
 def establish_connection(ipadd, port, password):
     print("Connecting to Server...")
     global server_addr, client_packet, server_packet
     server_addr = (ipadd, port)
 
-    #flush socket for true reset in buffer
+    #Flush socket for true reset in buffer
     client.setblocking(False)
     while True:
         try:
@@ -43,38 +50,46 @@ def establish_connection(ipadd, port, password):
             break
             
     client.settimeout(2.0)
+    #Hashes the password sent by the user
     hashed_pw = hashlib.sha256(password.encode()).hexdigest()
+    #Client's ISN for this example is 69, Creates Packet instance for server
     client_packet = Packet(mtype="SYN", seq_syn=69, payload=hashed_pw)
 
+    #Retries for timeout
     max_retries = 3
     attempts = 0
     connected = False
 
     while attempts < max_retries:
-        #sending SYN to server
+        #Sending SYN to server
         client.sendto(client_packet.encode(), server_addr)
         client.settimeout(2.0)
 
         try:
-            #awaiting SYN-ACK from server
+            #Awaiting SYN-ACK from server
             raw_bytes, server_addr = client.recvfrom(65535)
 
             server_packet = Packet.decode(raw_bytes)
 
+            #Checks if the header from the server packet is SYN-ACK
             if server_packet.mtype == "SYN-ACK":
                 print(f"Acknowledged packet from {server_addr}")
                 client_packet.mtype="ACK"
                 client_packet.seq_syn = server_packet.seq_ack
                 client_packet.seq_ack = server_packet.seq_syn + 1
+
+                #Shows Client's and Server's Sequence Numbers
                 print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
                 connected = True
                 break
             else:
                 print("Error: Header is not \"SYN-ACK\"")
         except (socket.timeout, ConnectionResetError):
+            #Timeout handle
             attempts += 1
             print(f"Connection timeout. Retrying SYN {attempts}/{max_retries}...")
 
+    #Displays if server cannot be reached
     if not connected:
         print("Error: Could not reach server.")
         client.settimeout(None)
@@ -83,7 +98,7 @@ def establish_connection(ipadd, port, password):
     attempts = 0
     connected = False
 
-    #for the sequence numbers to be stable
+    #For the sequence numbers to be stable that's why there is a '4th' handshake
     while attempts < max_retries:
         client.sendto(client_packet.encode(), server_addr)
         client.settimeout(2.0)
@@ -97,6 +112,7 @@ def establish_connection(ipadd, port, password):
                 print(f"Acknowledged packet from {server_addr}")
 
                 client_packet.mtype=""
+                #Makes the sequence number the same for the client's side
                 client_packet.seq_syn = server_packet.seq_ack
                 client_packet.seq_ack = server_packet.seq_syn
                 print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
@@ -111,9 +127,11 @@ def establish_connection(ipadd, port, password):
 
     if not connected:
         print("Error: Could not reach server.")
+        #Returns False for Is_connected
         return False
 
     client.settimeout(None) 
+    #Returns True for Is_connected so client can access other features
     return True
 
 #Leave the connection
@@ -122,20 +140,24 @@ def leave_connection():
     
     client_packet.mtype="FIN"
 
+    #Retries for Timeout
     max_retries = 3
     attempts = 0
     fin_acked = False
+
+
     while attempts < max_retries:
         client.sendto(client_packet.encode(), server_addr)
         client.settimeout(2.0)
         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
 
-    #awaiting FIN-ACK from server
+        #Awaiting FIN-ACK from server
         try:
             raw_bytes, server_addr = client.recvfrom(1024)
 
             server_packet = Packet.decode(raw_bytes)
 
+            #Checks if packet header is FIN-ACK
             if server_packet.mtype == "FIN-ACK":
                 print(f"Acknowledged packet from {server_addr}")
 
@@ -151,6 +173,7 @@ def leave_connection():
             attempts += 1
             print(f"Timeout waiting for FIN-ACK. Retrying FIN {attempts}/{max_retries}...")
 
+    #Disconnects Forcibly
     if not fin_acked:
         print("Error: Server unresponsive. Forcing local disconnect.")
         client_packet.mtype = ""
@@ -164,6 +187,7 @@ def leave_connection():
     attempts = 0  
     disconnected = False
 
+    #Waits for Final Acknowledgement from server
     while attempts < max_retries:
         client.sendto(client_packet.encode(), server_addr)
         client.settimeout(2.0)
@@ -190,12 +214,14 @@ def leave_connection():
         
     client.settimeout(None)
     
+    #Regardless if its acknowledged properly or not, it will still disconnect
     if not disconnected:
         print("Error: Did not receive final ACK, but disconnected locally anyway.")
         is_connected = False
     
     return True
-    
+
+#Stores file to server
 def send_file(filename):
     global server_addr, client_packet, server_packet, is_connected
     filesize = os.path.getsize(filename)
@@ -204,6 +230,7 @@ def send_file(filename):
     client_packet.mtype = "STORE"
     client_packet.payload = f"{filename}|{filesize}"
     
+    #Retries for timeout
     max_retries = 3
     attempts = 0
     server_ready = False
@@ -228,8 +255,10 @@ def send_file(filename):
                     print("Upload cancelled.")
                     return
                 
+                #Waits for decision acknowledgement from server
                 decision_attempts = 0
                 decision_acked = False
+
                 while decision_attempts < max_retries:
                     client.sendto(client_packet.encode(), server_addr)
                     client.settimeout(2.0)
@@ -239,23 +268,26 @@ def send_file(filename):
                         
                         if server_packet.mtype == "ACK":
                             decision_acked = True
-                            break # Break the inner decision loop
+                            break # Break the inner decision loop if acknowledged
                             
                     except (socket.timeout, ConnectionResetError):
                         decision_attempts += 1
                         print(f"Server didn't acknowledge overwrite decision. Retrying ({decision_attempts}/{max_retries})...")
                 
+                #Sets is_connected to False if lost connection
                 if not decision_acked:
                     print("Error: Server lost connection during overwrite decision.")
                     is_connected = False
                     return
-                
+
                 if choice != 'y':
                     print("Upload cancelled.")
                     return
+                #Ready for upload for overwriting
                 print(f"Server ready for upload: {filename}")
                 server_ready = True
                 break
+            #Ready for upload, not for overwriting
             if server_packet.mtype == "ACK":
                 print(f"Server ready for upload: {filename}")
                 server_ready = True
@@ -263,35 +295,39 @@ def send_file(filename):
         except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Server did not acknowledge request. Retrying {attempts}/{max_retries}...")
-            
+    
+    #Sets is_connected to False if lost connection
     if not server_ready:
         print("Error: Server is cannot be reached.")
         is_connected = False
         return 
 
-    #upload file
+    #Begin to Upload file
     with open(filename, "rb") as f:
         while True:
             chunk = f.read(512)
             if not chunk: 
                 break # End of file
             
+            #Adding the file chunks to the payload
             payload_str = chunk.decode('latin-1') 
             client_packet.mtype = "DATA"
             client_packet.seq_syn = server_packet.seq_ack
             client_packet.payload = payload_str
 
+            #Set attempts for chunk sending
             chunk_attempts = 0
             chunk_acked = False
             
-            #check if server is up while files is sending
+            #Check if server is up while files is sending
             while chunk_attempts < max_retries:
                 client.sendto(client_packet.encode(), server_addr)
                 client.settimeout(2.0) 
                 try:
                     raw, _ = client.recvfrom(2048)
                     server_packet = Packet.decode(raw)
-
+                    
+                    #Checks if server acknowledges the chunk
                     if server_packet.mtype == "ACK":
                         client_packet.seq_syn += 1
                         print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
@@ -302,16 +338,18 @@ def send_file(filename):
                         bar = "#" * int(progress // 5)
                         print(f"\rUploading: [{bar:<20}] {progress:.1f}%           ", end="")
                         chunk_acked = True
-                        break #  break inner loop
+                        break #  Break inner loop
                 except (socket.timeout, ConnectionResetError):
                     chunk_attempts += 1
+                    #Retransmits packets when the try fails
                     print(f"Retransmitting packet {client_packet.seq_syn} ({chunk_attempts}/{max_retries})...")
             
             if not chunk_acked:
                 print("Error: Server lost connection mid-upload.")
                 is_connected = False
                 return
-            
+    
+    #Initialize EOF
     client_packet.mtype = "EOF"
     client_packet.payload_size = 0
     client_packet.payload = calculate_file_hash(filename)
@@ -333,37 +371,41 @@ def send_file(filename):
             print(f"\nRetrying EOF packet ({attempts}/{max_retries})...")
 
     client.settimeout(None)
+    #Displays if EOF is acknowledged or not
     if eof_acked:
         print("\nUpload complete.")
     else:
         print("\nUpload finished, but EOF acknowledgement failed.")
         is_connected = False
-        
+
+#Requests a file from the Server
 def request_download(filename):
     global server_addr, client_packet, server_packet, is_connected
     
-    # Filename increment logic
+    #Filename increment logic
     base_path = Path(f"received_{filename}")
     counter = 2
     final_filename = f"received_{filename}"
     
-    # If "received_test.txt" exists, try "received_test(2).txt", then "(3)", etc.
+    #If "received_test.txt" exists, try "received_test(2).txt", then "(3)", etc.
     while os.path.exists(final_filename):
         name_part = base_path.stem # e.g., "received_test"
         suffix_part = base_path.suffix # e.g., ".txt"
         final_filename = f"{name_part}({counter}){suffix_part}"
         counter += 1
         
-        
+    #Intializes the GET header for getting the requested file
     client_packet.mtype="GET"
     client_packet.payload=filename
     client.sendto(client_packet.encode(), server_addr)
     
+    #Variables to check for the file download 
     total_size = 0
     bytes_received = 0
     file_opened = False
     f = None
 
+    #Retries for timeout
     max_retries = 3
     attempts = 0
     
@@ -377,7 +419,7 @@ def request_download(filename):
             if server_packet.mtype == "ACK" and total_size == 0:
                 try:
                     total_size = int(server_packet.payload)
-                    # Open file only after we know it exists and have the size
+                    #Open file only after we know it exists and have the size
                     f = open(final_filename, "wb")
                     file_opened = True
                     continue
@@ -389,13 +431,14 @@ def request_download(filename):
                 print(f"\nServer Error: {server_packet.payload}") 
                 return
 
-            
+            #If the header is data and the file is succesfully opened
             if server_packet.mtype == "DATA" and file_opened:
                 if server_packet.seq_syn == client_packet.seq_ack:
                     data = server_packet.payload.encode('latin-1')
                     f.write(data)
                     bytes_received += len(data)
                     print(f"Seq No for Client: {client_packet.seq_syn}, Seq No for Server: {client_packet.seq_ack}")
+                    #Displays the percentage on how much data is written on the file
                     if total_size > 0:
                         progress = (bytes_received / total_size) * 100
                         bar = "=" * int(progress // 5)
@@ -404,7 +447,7 @@ def request_download(filename):
                     client_packet.mtype = "ACK"
                     client_packet.seq_ack += 1
                     client.sendto(client_packet.encode(), server_addr)
-
+            #Checks if header is EOF
             if server_packet.mtype == "EOF":
                 client_packet.mtype="ACK"
                 client_packet.seq_ack += 1
@@ -413,10 +456,12 @@ def request_download(filename):
                     f.close()
                     f = None
                 
+                #Receives hash for file integrity
                 print("Verifying file integrity...")
                 received_hash = server_packet.payload
                 local_hash = calculate_file_hash(final_filename)
                 
+                #Checks if the hash created is the same 
                 if received_hash == local_hash:
                     print("\nDownload complete.")
                 else:
@@ -431,7 +476,7 @@ def request_download(filename):
                 is_connected = False
                 break 
             
-            # Re-transmit the last packet we sent 
+            # Retransmit the last packet sent 
             client.sendto(client_packet.encode(), server_addr)
     
     if f: f.close()

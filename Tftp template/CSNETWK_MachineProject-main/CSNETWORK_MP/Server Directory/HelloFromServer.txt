@@ -1,1 +1,0 @@
-This text file originated in the server folder.
