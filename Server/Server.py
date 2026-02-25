@@ -2,6 +2,7 @@ import socket
 import os
 import random
 from Packet import Packet
+import hashlib
 
 server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_packet = None
@@ -10,6 +11,21 @@ server_packet = None
 #toggle for retransmission simulation
 SIMULATE_DROP = True
 DROP_RATE = 0.10
+
+#pass of server
+SERVER_PASS = "iwantbonuspoints"
+PASS_HASH = hashlib.sha256(SERVER_PASS.encode()).hexdigest()
+
+def calculate_file_hash(filename):
+    """Generates a SHA-256 hash for a given file."""
+    sha256 = hashlib.sha256()
+    with open(filename, "rb") as f:
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 def reset_connection_state():
     global client_packet, server_packet
@@ -25,6 +41,17 @@ def reset_connection_state():
         client_packet.seq_ack = 0
         client_packet.payload_size = 0
         client_packet.payload = ""
+
+    #flush socket for true reset in buffer
+    server.setblocking(False)
+    while True:
+        try:
+            server.recv(65536)
+        except (BlockingIOError, socket.error):
+            break
+            
+    server.settimeout(1.0)
+
     print("Deleting session, waiting for new client...\n")
 
 #Establish connection
@@ -35,7 +62,11 @@ def awaiting_connection(client_addr):
     #awaiting SYN from client
 
     if client_packet.mtype == "SYN":
-        print(f"Acknowledged packet from {client_addr}")
+        if client_packet.payload != PASS_HASH:
+            print(f"Error: Authentication failed, Incorrect password.")
+            return
+        
+        print(f"Acknowledged packet from {client_addr}, Client Authenticated")
 
          #client's ISN for this example is 67
         server_packet = Packet(mtype="SYN-ACK", seq_syn = 67, seq_ack = client_packet.seq_syn + 1)
@@ -172,6 +203,15 @@ def receive_file(client_addr):
                     server_packet.mtype="ACK"
                     server_packet.seq_ack += 1
                     server.sendto(server_packet.encode(), client_addr)
+                    f.close()
+                    
+                    received_hash = client_packet.payload
+                    local_hash = calculate_file_hash(filename)
+                    
+                    if received_hash == local_hash:
+                        print("\n[SUCCESS] Transfer finished. SHA-256 Hash verified perfectly!")
+                    else:
+                        print("\n[WARNING] Transfer finished, but file integrity check failed!")
                     print("Transfer finished.")
                     break
             except (socket.timeout, ConnectionResetError):
@@ -258,7 +298,7 @@ def handle_download(client_addr):
     # Send EOF to signal finish
     server_packet.mtype = "EOF"
     server_packet.payload_size = 0
-    server_packet.payload = ""
+    server_packet.payload = calculate_file_hash(filename)
     
     attempts = 0
     while attempts < max_retries:
@@ -310,6 +350,7 @@ def disconnect_connection(client_addr):
         except (socket.timeout, ConnectionResetError):
             attempts += 1
             print(f"Timeout waiting for FIN-ACK's ACK. Retrying {attempts}/{max_retries}...")
+            server.sendto(server_packet.encode(), client_addr)
             
     print("Client unresponsive during disconnect. Forcing drop.")
     reset_connection_state()

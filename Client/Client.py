@@ -3,6 +3,7 @@ import os
 import time
 from pathlib import Path
 from Packet import Packet
+import hashlib
 
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_packet = None
@@ -10,20 +11,40 @@ server_packet = None
 server_addr = None
 is_connected = False
 
+def calculate_file_hash(filename):
+    """Generates a SHA-256 hash for a given file."""
+    sha256 = hashlib.sha256()
+    with open(filename, "rb") as f:
+        while True:
+            chunk = f.read(4096)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
 def display_commands():
     print("COMMAND LISTS")
-    print("/join <server_ip_add> <port>")
+    print("/join <server_ip_add> <port> <password>")
     print("/leave")
     print("/store <filename>")
     print("/get <filename>")
 
-def establish_connection(ipadd, port):
+def establish_connection(ipadd, port, password):
     print("Connecting to Server...")
     global server_addr, client_packet, server_packet
     server_addr = (ipadd, port)
 
-    #client's ISN for this example is 69
-    client_packet = Packet(mtype="SYN", seq_syn=69)
+    #flush socket for true reset in buffer
+    client.setblocking(False)
+    while True:
+        try:
+            client.recv(65536)
+        except (BlockingIOError, socket.error):
+            break
+            
+    client.settimeout(2.0)
+    hashed_pw = hashlib.sha256(password.encode()).hexdigest()
+    client_packet = Packet(mtype="SYN", seq_syn=69, payload=hashed_pw)
 
     max_retries = 3
     attempts = 0
@@ -293,7 +314,7 @@ def send_file(filename):
             
     client_packet.mtype = "EOF"
     client_packet.payload_size = 0
-    client_packet.payload = ""
+    client_packet.payload = calculate_file_hash(filename)
 
     #Check if EOF acknowledged
     attempts = 0
@@ -388,7 +409,18 @@ def request_download(filename):
                 client_packet.mtype="ACK"
                 client_packet.seq_ack += 1
                 client.sendto(client_packet.encode(), server_addr)
-                print("\nDownload complete.")
+                if f:
+                    f.close()
+                    f = None
+                
+                print("Verifying file integrity...")
+                received_hash = server_packet.payload
+                local_hash = calculate_file_hash(final_filename)
+                
+                if received_hash == local_hash:
+                    print("\nDownload complete.")
+                else:
+                    print("Error: File check failed")
                 break
 
         except (socket.timeout, ConnectionResetError):
@@ -420,11 +452,12 @@ def main():
         match cmd_key[0]:
             case "/join":
                 if not is_connected:
-                    if len(cmd_key) == 3:
+                    if len(cmd_key) == 4:
                         ipadd = cmd_key[1]  # a string
                         port = int(cmd_key[2])  # an int
+                        password = cmd_key[3]
 
-                        is_connected = establish_connection(ipadd, port)
+                        is_connected = establish_connection(ipadd, port, password)
                         
                 else:
                     print("Error: You are already connected")
