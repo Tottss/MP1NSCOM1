@@ -434,6 +434,7 @@ def request_download(filename):
             #If the header is data and the file is succesfully opened
             if server_packet.mtype == "DATA" and file_opened:
                 if server_packet.seq_syn == client_packet.seq_ack:
+                    attempts = 0
                     data = server_packet.payload.encode('latin-1')
                     f.write(data)
                     bytes_received += len(data)
@@ -447,6 +448,13 @@ def request_download(filename):
                     client_packet.mtype = "ACK"
                     client_packet.seq_ack += 1
                     client.sendto(client_packet.encode(), server_addr)
+                else:
+                    # Retransmit the packet
+                    print(f"Retransmitting packet {client_packet.seq_syn} ({attempts}/{max_retries})...")
+                    attempts += 1
+                    client_packet.mtype = "ACK"
+                    client.sendto(client_packet.encode(), server_addr)
+
             #Checks if header is EOF
             if server_packet.mtype == "EOF":
                 client_packet.mtype="ACK"
